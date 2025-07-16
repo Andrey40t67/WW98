@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows 98 - Полная виртуальная машина</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=MS+Sans+Serif:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        input, textarea, .selectable {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+
+        body {
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 11px;
+            background: #000;
+            color: #000;
+            overflow: hidden;
+            cursor: default;
+        }
+
+        /* Экран входа в систему */
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #008080;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+        }
+
+        .login-screen.hidden {
+            display: none;
+        }
+
+        .login-window {
+            width: 400px;
+            height: 300px;
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            box-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+        }
+
+        .login-titlebar {
+            height: 22px;
+            background: linear-gradient(to right, #0054e3, #1084d0);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .login-content {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .login-icon {
+            width: 64px;
+            height: 64px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="20" r="12" fill="%23333"/><path d="M32 36c-12 0-22 8-22 18h44c0-10-10-18-22-18z" fill="%23333"/></svg>');
+            background-size: contain;
+            margin: 0 auto 20px;
+        }
+
+        .login-user {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .login-password {
+            width: 200px;
+            height: 22px;
+            padding: 2px 6px;
+            border: 1px inset #c0c0c0;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 11px;
+            margin-bottom: 20px;
+        }
+
+        .login-button {
+            width: 75px;
+            height: 23px;
+            background: linear-gradient(to bottom, #c0c0c0, #a0a0a0);
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            font-size: 11px;
+            margin: 0 5px;
+        }
+
+        .login-button:hover {
+            background: linear-gradient(to bottom, #d0d0d0, #b0b0b0);
+        }
+
+        .login-button:active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #b0b0b0, #909090);
+        }
+
+        .login-error {
+            color: #ff0000;
+            font-size: 10px;
+            margin-top: 10px;
+        }
+
+        /* BIOS и загрузка */
+        .bios-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            z-index: 10002;
+            padding: 20px;
+            animation: biosSequence 4s forwards;
+        }
+
+        @keyframes biosSequence {
+            0% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { opacity: 0; pointer-events: none; }
+        }
+
+        .boot-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000080;
+            color: #fff;
+            font-family: 'MS Sans Serif', sans-serif;
+            z-index: 10001;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: bootScreen 6s forwards;
+        }
+
+        @keyframes bootScreen {
+            0% { opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; pointer-events: none; }
+        }
+
+        .windows-logo {
+            width: 400px;
+            height: 200px;
+            background: linear-gradient(45deg, #ff0000, #ffff00, #00ff00, #0000ff);
+            border: 3px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            margin-bottom: 40px;
+        }
+
+        .boot-progress {
+            width: 500px;
+            height: 30px;
+            background: #c0c0c0;
+            border: 2px inset #c0c0c0;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .boot-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0000ff, #00ffff);
+            width: 0%;
+            animation: bootProgress 4s ease-in-out forwards;
+        }
+
+        @keyframes bootProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* Рабочий стол */
+        .desktop {
+            width: 100vw;
+            height: 100vh;
+            background: #008080;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23008080"/><pattern id="grid" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="%23006060" stroke-width="0.5" opacity="0.3"/></pattern><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+
+        .desktop.show {
+            display: block;
+        }
+
+        /* Панель задач */
+        .taskbar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background: linear-gradient(to bottom, #c0c0c0 0%, #a0a0a0 50%, #808080 100%);
+            border-top: 1px solid #dfdfdf;
+            display: flex;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.3);
+        }
+
+        .start-button {
+            height: 26px;
+            padding: 0 12px;
+            background: linear-gradient(to bottom, #c0c0c0, #a0a0a0);
+            border: 1px outset #c0c0c0;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            margin: 2px;
+            font-size: 11px;
+        }
+
+        .start-button:hover {
+            background: linear-gradient(to bottom, #d0d0d0, #b0b0b0);
+        }
+
+        .start-button:active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #a0a0a0, #808080);
+        }
+
+        .start-button::before {
+            content: "⊞";
+            font-size: 14px;
+            color: #000080;
+            font-weight: bold;
+        }
+
+        .quick-launch {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            margin: 0 4px;
+            padding: 2px 4px;
+            border-right: 1px solid #808080;
+        }
+
+        .quick-launch-icon {
+            width: 20px;
+            height: 20px;
+            background: #c0c0c0;
+            border: 1px solid transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .quick-launch-icon:hover {
+            border: 1px outset #c0c0c0;
+            background: #d0d0d0;
+        }
+
+        .quick-launch-icon:active {
+            border: 1px inset #c0c0c0;
+        }
+
+        .task-list {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            gap: 2px;
+        }
+
+        .task-item {
+            height: 24px;
+            padding: 0 8px;
+            background: linear-gradient(to bottom, #c0c0c0, #a0a0a0);
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-size: 10px;
+            min-width: 120px;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .task-item.active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #a0a0a0, #808080);
+        }
+
+        .system-tray {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 8px;
+            border-left: 1px solid #808080;
+        }
+
+        .tray-icon {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .clock {
+            font-size: 10px;
+            padding: 2px 4px;
+            border: 1px inset #c0c0c0;
+            background: #c0c0c0;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        /* Иконки рабочего стола */
+        .desktop-icons {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, 75px);
+            gap: 15px;
+            width: 300px;
+        }
+
+        .desktop-icon {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+
+        .desktop-icon:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .desktop-icon.selected {
+            background: #316ac5;
+            color: white;
+        }
+
+        .icon-image {
+            width: 32px;
+            height: 32px;
+            font-size: 24px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-label {
+            font-size: 10px;
+            text-align: center;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            word-wrap: break-word;
+            line-height: 1.2;
+        }
+
+        /* Окна */
+        .window {
+            position: absolute;
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            min-width: 300px;
+            min-height: 200px;
+            display: none;
+            box-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+            z-index: 100;
+            resize: both;
+            overflow: hidden;
+        }
+
+        .window.active {
+            z-index: 200;
+        }
+
+        .window-titlebar {
+            height: 22px;
+            background: linear-gradient(to right, #0054e3, #1084d0);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            cursor: move;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .window.inactive .window-titlebar {
+            background: linear-gradient(to right, #808080, #a0a0a0);
+        }
+
+        .window-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+            font-size: 12px;
+        }
+
+        .window-title {
+            flex: 1;
+            padding-left: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 2px;
+        }
+
+        .window-control {
+            width: 16px;
+            height: 14px;
+            background: #c0c0c0;
+            border: 1px outset #c0c0c0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 8px;
+            font-weight: bold;
+        }
+
+        .window-control:hover {
+            background: #d0d0d0;
+        }
+
+        .window-control:active {
+            border: 1px inset #c0c0c0;
+            background: #a0a0a0;
+        }
+
+        .window-menubar {
+            height: 20px;
+            background: #c0c0c0;
+            border-bottom: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+        }
+
+        .menu-item {
+            padding: 2px 8px;
+            cursor: pointer;
+            font-size: 10px;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            background: #316ac5;
+            color: white;
+        }
+
+        .window-content {
+            flex: 1;
+            overflow: auto;
+            padding: 8px;
+            background: #c0c0c0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-statusbar {
+            height: 18px;
+            background: #c0c0c0;
+            border-top: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            font-size: 10px;
+        }
+
+        .status-panel {
+            border: 1px inset #c0c0c0;
+            padding: 1px 4px;
+            margin-right: 4px;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        /* Браузер */
+        .browser {
+            width: 800px;
+            height: 600px;
+        }
+
+        .browser-toolbar {
+            height: 30px;
+            background: #c0c0c0;
+            border-bottom: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            gap: 4px;
+        }
+
+        .toolbar-button {
+            width: 24px;
+            height: 24px;
+            background: #c0c0c0;
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .toolbar-button:hover {
+            background: #d0d0d0;
+        }
+
+        .toolbar-button:active {
+            border: 1px inset #c0c0c0;
+            background: #a0a0a0;
+        }
+
+        .browser-addressbar {
+            height: 26px;
+            background: #c0c0c0;
+            border-bottom: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            gap: 4px;
+        }
+
+        .address-input {
+            flex: 1;
+            height: 20px;
+            padding: 2px 4px;
+            border: 1px inset #c0c0c0;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 10px;
+            background: white;
+        }
+
+        .browser-frame {
+            width: 100%;
+            height: 100%;
+            border: 1px inset #c0c0c0;
+            background: white;
+            overflow: auto;
+        }
+
+        .browser-content {
+            padding: 10px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .webpage h1 {
+            color: #000080;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .webpage h2 {
+            color: #800000;
+            font-size: 14px;
+            margin: 10px 0 5px 0;
+        }
+
+        .webpage p {
+            margin-bottom: 10px;
+        }
+
+        .webpage a {
+            color: #0000ff;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .webpage a:visited {
+            color: #800080;
+        }
+
+        .webpage a:hover {
+            background: #ffff00;
+        }
+
+        /* Магазин приложений */
+        .app-store {
+            width: 700px;
+            height: 500px;
+        }
+
+        .store-toolbar {
+            height: 30px;
+            background: #c0c0c0;
+            border-bottom: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            gap: 8px;
+        }
+
+        .store-search {
+            flex: 1;
+            height: 20px;
+            padding: 2px 4px;
+            border: 1px inset #c0c0c0;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 10px;
+        }
+
+        .store-content {
+            display: flex;
+            height: calc(100% - 30px);
+        }
+
+        .store-categories {
+            width: 150px;
+            background: #c0c0c0;
+            border-right: 1px solid #808080;
+            overflow-y: auto;
+        }
+
+        .store-category {
+            padding: 6px 8px;
+            cursor: pointer;
+            font-size: 10px;
+            border-bottom: 1px solid #a0a0a0;
+        }
+
+        .store-category:hover {
+            background: #d0d0d0;
+        }
+
+        .store-category.active {
+            background: #316ac5;
+            color: white;
+        }
+
+        .store-apps {
+            flex: 1;
+            background: white;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .app-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .app-item:hover {
+            background: #f0f0f0;
+        }
+
+        .app-icon {
+            width: 48px;
+            height: 48px;
+            margin-right: 12px;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #c0c0c0;
+            background: #f8f8f8;
+        }
+
+        .app-info {
+            flex: 1;
+        }
+
+        .app-name {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .app-developer {
+            color: #666;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .app-description {
+            font-size: 10px;
+            color: #333;
+            line-height: 1.3;
+        }
+
+        .app-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .app-button {
+            padding: 4px 12px;
+            background: linear-gradient(to bottom, #c0c0c0, #a0a0a0);
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            font-size: 10px;
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .app-button:hover {
+            background: linear-gradient(to bottom, #d0d0d0, #b0b0b0);
+        }
+
+        .app-button:active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #b0b0b0, #909090);
+        }
+
+        .app-button.installed {
+            background: linear-gradient(to bottom, #80ff80, #60ff60);
+        }
+
+        .app-rating {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Меню Пуск */
+        .start-menu {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 250px;
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            display: none;
+            box-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+            z-index: 1001;
+        }
+
+        .start-menu.show {
+            display: block;
+        }
+
+        .start-menu-header {
+            height: 50px;
+            background: linear-gradient(to right, #000080, #0080ff);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .start-menu-items {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .start-menu-item {
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .start-menu-item:hover {
+            background: #316ac5;
+            color: white;
+        }
+
+        .start-menu-separator {
+            height: 1px;
+            background: #808080;
+            margin: 2px 0;
+        }
+
+        .start-menu-icon {
+            width: 16px;
+            height: 16px;
+            font-size: 12px;
+        }
+
+        /* Калькулятор */
+        .calculator {
+            width: 250px;
+            height: 320px;
+        }
+
+        .calc-display {
+            height: 40px;
+            background: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            text-align: right;
+            padding: 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            margin: 8px;
+            border: 2px inset #c0c0c0;
+        }
+
+        .calc-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            padding: 8px;
+        }
+
+        .calc-button {
+            height: 35px;
+            background: linear-gradient(to bottom, #e0e0e0, #c0c0c0);
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .calc-button:hover {
+            background: linear-gradient(to bottom, #f0f0f0, #d0d0d0);
+        }
+
+        .calc-button:active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #d0d0d0, #b0b0b0);
+        }
+
+        .calc-button.operator {
+            background: linear-gradient(to bottom, #ff8080, #ff6060);
+            color: white;
+        }
+
+        .calc-button.equals {
+            background: linear-gradient(to bottom, #80ff80, #60ff60);
+        }
+
+        /* Текстовый редактор */
+        .text-editor {
+            width: 600px;
+            height: 450px;
+        }
+
+        .editor-textarea {
+            width: 100%;
+            height: 100%;
+            border: 1px inset #c0c0c0;
+            background: white;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 4px;
+            resize: none;
+            outline: none;
+        }
+
+        /* Paint */
+        .paint {
+            width: 700px;
+            height: 500px;
+        }
+
+        .paint-toolbar {
+            height: 60px;
+            background: #c0c0c0;
+            border-bottom: 1px solid #808080;
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .paint-canvas {
+            width: 100%;
+            height: 100%;
+            border: 1px inset #c0c0c0;
+            background: white;
+            cursor: crosshair;
+        }
+
+        /* Диалоговые окна */
+        .dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            box-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+            z-index: 1003;
+            display: none;
+            min-width: 300px;
+        }
+
+        .dialog.show {
+            display: block;
+        }
+
+        .dialog-titlebar {
+            height: 20px;
+            background: linear-gradient(to right, #0054e3, #1084d0);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .dialog-content {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .dialog-icon {
+            width: 32px;
+            height: 32px;
+            font-size: 28px;
+        }
+
+        .dialog-text {
+            flex: 1;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .dialog-buttons {
+            padding: 10px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid #808080;
+        }
+
+        .dialog-button {
+            padding: 6px 16px;
+            background: linear-gradient(to bottom, #c0c0c0, #a0a0a0);
+            border: 1px outset #c0c0c0;
+            cursor: pointer;
+            font-size: 11px;
+            min-width: 75px;
+        }
+
+        .dialog-button:hover {
+            background: linear-gradient(to bottom, #d0d0d0, #b0b0b0);
+        }
+
+        .dialog-button:active {
+            border: 1px inset #c0c0c0;
+            background: linear-gradient(to bottom, #b0b0b0, #909090);
+        }
+
+        /* Уведомления */
+        .notification {
+            position: fixed;
+            bottom: 40px;
+            right: 10px;
+            background: #ffffcc;
+            border: 2px outset #c0c0c0;
+            padding: 8px;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 1004;
+            display: none;
+            font-size: 10px;
+            max-width: 250px;
+        }
+
+        .notification.show {
+            display: block;
+        }
+
+        /* Анимации */
+        @keyframes windowAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .window.opening {
+            animation: windowAppear 0.2s ease-out;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .window {
+                width: 95vw !important;
+                height: 80vh !important;
+                top: 10px !important;
+                left: 2.5vw !important;
+            }
+            
+            .start-menu {
+                width: 200px;
+            }
+            
+            .desktop-icons {
+                grid-template-columns: repeat(4, 1fr);
+                width: 280px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- BIOS экран -->
+    <div class="bios-screen" id="biosScreen">
+        <div style="color: #ffffff; font-weight: bold; margin-bottom: 20px;">Award Modular BIOS v4.51PG</div>
+        <div>Detecting Primary Master ... IDE Hard Drive</div>
+        <div>Detecting Primary Slave ... Not Detected</div>
+        <div>Detecting Secondary Master ... ATAPI CD-ROM</div>
+        <div>Detecting Secondary Slave ... Not Detected</div>
+        <div>Memory Test : 65536K OK</div>
+        <div>Primary Master : ST3160023A</div>
+        <div>Starting Windows 98...</div>
+        <div style="animation: blink 1s infinite;">_</div>
+    </div>
+
+    <!-- Загрузочный экран -->
+    <div class="boot-screen" id="bootScreen">
+        <div class="windows-logo">Microsoft Windows 98</div>
+        <div style="color: #fff; font-size: 16px; margin-bottom: 20px;">Starting Windows...</div>
+        <div class="boot-progress">
+            <div class="boot-bar"></div>
+        </div>
+    </div>
+
+    <!-- Экран входа -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-window">
+            <div class="login-titlebar">
+                <span>Вход в Windows</span>
+            </div>
+            <div class="login-content">
+                <div class="login-icon"></div>
+                <div class="login-user">Andrey</div>
+                <div>Введите пароль:</div>
+                <input type="password" class="login-password" id="passwordInput" placeholder="Пароль">
+                <div>
+                    <button class="login-button" onclick="login()">OK</button>
+                    <button class="login-button" onclick="cancelLogin()">Отмена</button>
+                </div>
+                <div class="login-error" id="loginError"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Рабочий стол -->
+    <div class="desktop" id="desktop">
+        <!-- Иконки рабочего стола -->
+        <div class="desktop-icons">
+            <div class="desktop-icon" data-app="browser">
+                <div class="icon-image">🌐</div>
+                <div class="icon-label">Internet Explorer</div>
+            </div>
+            <div class="desktop-icon" data-app="filemanager">
+                <div class="icon-image">📁</div>
+                <div class="icon-label">Мой компьютер</div>
+            </div>
+            <div class="desktop-icon" data-app="calculator">
+                <div class="icon-image">🔢</div>
+                <div class="icon-label">Калькулятор</div>
+            </div>
+            <div class="desktop-icon" data-app="notepad">
+                <div class="icon-image">📝</div>
+                <div class="icon-label">Блокнот</div>
+            </div>
+            <div class="desktop-icon" data-app="paint">
+                <div class="icon-image">🎨</div>
+                <div class="icon-label">Paint</div>
+            </div>
+            <div class="desktop-icon" data-app="appstore">
+                <div class="icon-image">🏪</div>
+                <div class="icon-label">Магазин приложений</div>
+            </div>
+            <div class="desktop-icon" data-app="minesweeper">
+                <div class="icon-image">💣</div>
+                <div class="icon-label">Сапер</div>
+            </div>
+            <div class="desktop-icon" data-app="solitaire">
+                <div class="icon-image">🃏</div>
+                <div class="icon-label">Пасьянс</div>
+            </div>
+            <div class="desktop-icon" data-app="mediaplayer">
+                <div class="icon-image">🎵</div>
+                <div class="icon-label">Проигрыватель</div>
+            </div>
+            <div class="desktop-icon" data-app="terminal">
+                <div class="icon-image">💻</div>
+                <div class="icon-label">Командная строка</div>
+            </div>
+        </div>
+
+        <!-- Окно браузера -->
+        <div class="window browser" id="browserWindow">
+            <div class="window-titlebar">
+                <div class="window-icon">🌐</div>
+                <div class="window-title">Microsoft Internet Explorer</div>
+                <div class="window-controls">
+                    <div class="window-control" data-action="minimize">_</div>
+                    <div class="window-control" data-action="maximize">□</div>
+                    <div class="window-control" data-action="close">×</div>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <div class="menu-item">Файл</div>
+                <div class="menu-item">Правка</div>
+                <div class="menu-item">Вид</div>
+                <div class="menu-item">Избранное</div>
+                <div class="menu-item">Сервис</div>
+                <div class="menu-item">Справка</div>
+            </div>
+            <div class="browser-toolbar">
+                <div class="toolbar-button" onclick="browserAction('back')" title="Назад">⬅️</div>
+                <div class="toolbar-button" onclick="browserAction('forward')" title="Вперед">➡️</div>
+                <div class="toolbar-button" onclick="browserAction('stop')" title="Остановить">⏹️</div>
+                <div class="toolbar-button" onclick="browserAction('refresh')" title="Обновить">🔄</div>
+                <div class="toolbar-button" onclick="browserAction('home')" title="Домой">🏠</div>
+                <div class="toolbar-button" onclick="browserAction('search')" title="Поиск">🔍</div>
+                <div class="toolbar-button" onclick="browserAction('favorites')" title="Избранное">⭐</div>
+            </div>
+            <div class="browser-addressbar">
+                <span style="font-size: 10px; margin-right: 4px;">Адрес:</span>
+                <input type="text" class="address-input" id="addressInput" value="https://www.google.com" placeholder="Введите адрес">
+                <div class="toolbar-button" onclick="navigateToUrl()">▶️</div>
+            </div>
+            <div class="window-content" style="padding: 0;">
+                <div class="browser-frame" id="browserFrame">
+                    <div class="browser-content">
+                        <h1>🌐 Добро пожаловать в Internet Explorer</h1>
+                        <p>Этот браузер может загружать реальные веб-сайты!</p>
+                        
+                        <h2>🔗 Быстрые ссылки:</h2>
+                        <p>
+                            <a href="#" onclick="navigateTo('https://www.google.com')">Google</a> |
+                            <a href="#" onclick="navigateTo('https://www.youtube.com')">YouTube</a> |
+                            <a href="#" onclick="navigateTo('https://www.wikipedia.org')">Wikipedia</a> |
+                            <a href="#" onclick="navigateTo('https://www.github.com')">GitHub</a>
+                        </p>
+                        
+                        <h2>🎯 Популярные сайты:</h2>
+                        <ul>
+                            <li><a href="#" onclick="navigateTo('https://www.stackoverflow.com')">Stack Overflow</a></li>
+                            <li><a href="#" onclick="navigateTo('https://www.reddit.com')">Reddit</a></li>
+                            <li><a href="#" onclick="navigateTo('https://www.twitter.com')">Twitter</a></li>
+                            <li><a href="#" onclick="navigateTo('https://www.facebook.com')">Facebook</a></li>
+                        </ul>
+                        
+                        <p><strong>Введите любой URL в адресную строку выше!</strong></p>
+                    </div>
+                </div>
+            </div>
+            <div class="window-statusbar">
+                <div class="status-panel" id="browserStatus">Готов</div>
+                <div class="status-panel">Зона: Интернет</div>
+            </div>
+        </div>
+
+        <!-- Окно магазина приложений -->
+        <div class="window app-store" id="appstoreWindow">
+            <div class="window-titlebar">
+                <div class="window-icon">🏪</div>
+                <div class="window-title">Магазин приложений Windows 98</div>
+                <div class="window-controls">
+                    <div class="window-control" data-action="minimize">_</div>
+                    <div class="window-control" data-action="maximize">□</div>
+                    <div class="window-control" data-action="close">×</div>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <div class="menu-item">Файл</div>
+                <div class="menu-item">Правка</div>
+                <div class="menu-item">Вид</div>
+                <div class="menu-item">Справка</div>
+            </div>
+            <div class="store-toolbar">
+                <input type="text" class="store-search" placeholder="Поиск приложений..." onkeyup="searchApps(this.value)">
+                <div class="toolbar-button" onclick="refreshStore()" title="Обновить">🔄</div>
+            </div>
+            <div class="store-content">
+                <div class="store-categories">
+                    <div class="store-category active" data-category="all" onclick="filterApps('all')">Все приложения</div>
+                    <div class="store-category" data-category="games" onclick="filterApps('games')">Игры</div>
+                    <div class="store-category" data-category="productivity" onclick="filterApps('productivity')">Продуктивность</div>
+                    <div class="store-category" data-category="multimedia" onclick="filterApps('multimedia')">Мультимедиа</div>
+                    <div class="store-category" data-category="internet" onclick="filterApps('internet')">Интернет</div>
+                    <div class="store-category" data-category="utilities" onclick="filterApps('utilities')">Утилиты</div>
+                </div>
+                <div class="store-apps" id="storeApps">
+                    <!-- Приложения будут загружены через JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Окно калькулятора -->
+        <div class="window calculator" id="calculatorWindow">
+            <div class="window-titlebar">
+                <div class="window-icon">🔢</div>
+                <div class="window-title">Калькулятор</div>
+                <div class="window-controls">
+                    <div class="window-control" data-action="minimize">_</div>
+                    <div class="window-control" data-action="close">×</div>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <div class="menu-item">Вид</div>
+                <div class="menu-item">Правка</div>
+                <div class="menu-item">Справка</div>
+            </div>
+            <div class="window-content" style="padding: 0;">
+                <div class="calc-display" id="calcDisplay">0</div>
+                <div class="calc-buttons">
+                    <div class="calc-button" onclick="calcAction('clear')">C</div>
+                    <div class="calc-button" onclick="calcAction('ce')">CE</div>
+                    <div class="calc-button" onclick="calcAction('backspace')">←</div>
+                    <div class="calc-button operator" onclick="calcAction('/')" >÷</div>
+                    
+                    <div class="calc-button" onclick="calcAction('7')">7</div>
+                    <div class="calc-button" onclick="calcAction('8')">8</div>
+                    <div class="calc-button" onclick="calcAction('9')">9</div>
+                    <div class="calc-button operator" onclick="calcAction('*')">×</div>
+                    
+                    <div class="calc-button" onclick="calcAction('4')">4</div>
+                    <div class="calc-button" onclick="calcAction('5')">5</div>
+                    <div class="calc-button" onclick="calcAction('6')">6</div>
+                    <div class="calc-button operator" onclick="calcAction('-')">-</div>
+                    
+                    <div class="calc-button" onclick="calcAction('1')">1</div>
+                    <div class="calc-button" onclick="calcAction('2')">2</div>
+                    <div class="calc-button" onclick="calcAction('3')">3</div>
+                    <div class="calc-button operator" onclick="calcAction('+')">+</div>
+                    
+                    <div class="calc-button" onclick="calcAction('0')" style="grid-column: span 2;">0</div>
+                    <div class="calc-button" onclick="calcAction('.')">.</div>
+                    <div class="calc-button equals" onclick="calcAction('=')">=</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Окно блокнота -->
+        <div class="window text-editor" id="notepadWindow">
+            <div class="window-titlebar">
+                <div class="window-icon">📝</div>
+                <div class="window-title">Блокнот - Без названия</div>
+                <div class="window-controls">
+                    <div class="window-control" data-action="minimize">_</div>
+                    <div class="window-control" data-action="maximize">□</div>
+                    <div class="window-control" data-action="close">×</div>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <div class="menu-item">Файл</div>
+                <div class="menu-item">Правка</div>
+                <div class="menu-item">Поиск</div>
+                <div class="menu-item">Справка</div>
+            </div>
+            <div class="window-content" style="padding: 0;">
+                <textarea class="editor-textarea selectable" id="textArea" placeholder="Введите текст..."></textarea>
+            </div>
+        </div>
+
+        <!-- Окно Paint -->
+        <div class="window paint" id="paintWindow">
+            <div class="window-titlebar">
+                <div class="window-icon">🎨</div>
+                <div class="window-title">Paint</div>
+                <div class="window-controls">
+                    <div class="window-control" data-action="minimize">_</div>
+                    <div class="window-control" data-action="maximize">□</div>
+                    <div class="window-control" data-action="close">×</div>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <div class="menu-item">Файл</div>
+                <div class="menu-item">Правка</div>
+                <div class="menu-item">Вид</div>
+                <div class="menu-item">Рисунок</div>
+                <div class="menu-item">Справка</div>
+            </div>
+            <div class="paint-toolbar">
+                <div class="toolbar-button" onclick="selectTool('pencil')" title="Карандаш">✏️</div>
+                <div class="toolbar-button" onclick="selectTool('brush')" title="Кисть">🖌️</div>
+                <div class="toolbar-button" onclick="selectTool('eraser')" title="Ластик">🧽</div>
+                <div class="toolbar-button" onclick="clearPaintCanvas()" title="Очистить">🗑️</div>
+                
+                <div style="margin-left: 10px; display: flex; gap: 2px;">
+                    <div style="width: 20px; height: 20px; background: #000; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#000')"></div>
+                    <div style="width: 20px; height: 20px; background: #fff; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#fff')"></div>
+                    <div style="width: 20px; height: 20px; background: #f00; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#f00')"></div>
+                    <div style="width: 20px; height: 20px; background: #0f0; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#0f0')"></div>
+                    <div style="width: 20px; height: 20px; background: #00f; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#00f')"></div>
+                    <div style="width: 20px; height: 20px; background: #ff0; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#ff0')"></div>
+                    <div style="width: 20px; height: 20px; background: #f0f; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#f0f')"></div>
+                    <div style="width: 20px; height: 20px; background: #0ff; border: 1px solid #808080; cursor: pointer;" onclick="selectColor('#0ff')"></div>
+                </div>
+            </div>
+            <div class="window-content" style="padding: 0;">
+                <canvas class="paint-canvas" id="paintCanvas" width="600" height="400"></canvas>
+            </div>
+            <div class="window-statusbar">
+                <div class="status-panel">Готов</div>
+                <div class="status-panel" id="paintTool">Инструмент: Карандаш</div>
+            </div>
+        </div>
+
+        <!-- Панель задач -->
+        <div class="taskbar">
+            <div class="start-button" onclick="toggleStartMenu()">
+                Пуск
+            </div>
+            <div class="quick-launch">
+                <div class="quick-launch-icon" onclick="openApp('browser')" title="Internet Explorer">🌐</div>
+                <div class="quick-launch-icon" onclick="openApp('filemanager')" title="Мой компьютер">📁</div>
+                <div class="quick-launch-icon" onclick="openApp('notepad')" title="Блокнот">📝</div>
+                <div class="quick-launch-icon" onclick="showDesktop()" title="Показать рабочий стол">🖥️</div>
+            </div>
+            <div class="task-list" id="taskList">
+                <!-- Задачи будут добавляться динамически -->
+            </div>
+            <div class="system-tray">
+                <div class="tray-icon" onclick="showVolumeControl()">🔊</div>
+                <div class="tray-icon" onclick="showNetworkStatus()">📶</div>
+                <div class="tray-icon" onclick="showAntivirus()">🛡️</div>
+                <div class="clock" id="clock">00:00</div>
+            </div>
+        </div>
+
+        <!-- Меню Пуск -->
+        <div class="start-menu" id="startMenu">
+            <div class="start-menu-header">
+                Windows 98
+            </div>
+            <div class="start-menu-items">
+                <div class="start-menu-item" onclick="openApp('browser')">
+                    <div class="start-menu-icon">🌐</div>
+                    <span>Internet Explorer</span>
+                </div>
+                <div class="start-menu-item" onclick="openApp('filemanager')">
+                    <div class="start-menu-icon">📁</div>
+                    <span>Мой компьютер</span>
+                </div>
+                <div class="start-menu-separator"></div>
+                <div class="start-menu-item" onclick="openApp('notepad')">
+                    <div class="start-menu-icon">📝</div>
+                    <span>Блокнот</span>
+                </div>
+                <div class="start-menu-item" onclick="openApp('calculator')">
+                    <div class="start-menu-icon">🔢</div>
+                    <span>Калькулятор</span>
+                </div>
+                <div class="start-menu-item" onclick="openApp('paint')">
+                    <div class="start-menu-icon">🎨</div>
+                    <span>Paint</span>
+                </div>
+                <div class="start-menu-item" onclick="openApp('appstore')">
+                    <div class="start-menu-icon">🏪</div>
+                    <span>Магазин приложений</span>
+                </div>
+                <div class="start-menu-separator"></div>
+                <div class="start-menu-item" onclick="openApp('minesweeper')">
+                    <div class="start-menu-icon">💣</div>
+                    <span>Сапер</span>
+                </div>
+                <div class="start-menu-item" onclick="openApp('solitaire')">
+                    <div class="start-menu-icon">🃏</div>
+                    <span>Пасьянс</span>
+                </div>
+                <div class="start-menu-separator"></div>
+                <div class="start-menu-item" onclick="showRunDialog()">
+                    <div class="start-menu-icon">▶️</div>
+                    <span>Выполнить...</span>
+                </div>
+                <div class="start-menu-item" onclick="showShutdown()">
+                    <div class="start-menu-icon">⚡</div>
+                    <span>Завершение работы...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уведомления -->
+        <div class="notification" id="notification">
+            <div id="notificationText">Уведомление</div>
+        </div>
+    </div>
+
+    <script>
+        // Глобальные переменные
+        let openWindows = new Set();
+        let activeWindow = null;
+        let zIndexCounter = 100;
+        let isLoggedIn = false;
+        let calcExpression = '';
+        let calcDisplay = '0';
+        let installedApps = new Set();
+        let paintColor = '#000000';
+        let paintTool = 'pencil';
+        let isPainting = false;
+
+        // База данных приложений
+        const appDatabase = [
+            {
+                id: 'winamp',
+                name: 'Winamp',
+                developer: 'Nullsoft',
+                description: 'Популярный аудиоплеер с поддержкой MP3',
+                icon: '🎵',
+                category: 'multimedia',
+                rating: 4.8,
+                size: '2.1 MB'
+            },
+            {
+                id: 'doom',
+                name: 'DOOM',
+                developer: 'id Software',
+                description: 'Легендарный шутер от первого лица',
+                icon: '👹',
+                category: 'games',
+                rating: 4.9,
+                size: '15.2 MB'
+            },
+            {
+                id: 'photoshop',
+                name: 'Adobe Photoshop 5.5',
+                developer: 'Adobe Systems',
+                description: 'Профессиональный графический редактор',
+                icon: '🖼️',
+                category: 'productivity',
+                rating: 4.7,
+                size: '45.8 MB'
+            },
+            {
+                id: 'quake',
+                name: 'Quake II',
+                developer: 'id Software',
+                description: 'Научно-фантастический шутер',
+                icon: '🚀',
+                category: 'games',
+                rating: 4.8,
+                size: '38.5 MB'
+            },
+            {
+                id: 'office97',
+                name: 'Microsoft Office 97',
+                developer: 'Microsoft',
+                description: 'Полный офисный пакет',
+                icon: '📄',
+                category: 'productivity',
+                rating: 4.5,
+                size: '125 MB'
+            },
+            {
+                id: 'icq',
+                name: 'ICQ',
+                developer: 'Mirabilis',
+                description: 'Мгновенные сообщения',
+                icon: '💬',
+                category: 'internet',
+                rating: 4.6,
+                size: '3.2 MB'
+            },
+            {
+                id: 'winzip',
+                name: 'WinZip',
+                developer: 'WinZip Computing',
+                description: 'Архиватор файлов',
+                icon: '📦',
+                category: 'utilities',
+                rating: 4.4,
+                size: '1.8 MB'
+            },
+            {
+                id: 'realplayer',
+                name: 'RealPlayer',
+                developer: 'RealNetworks',
+                description: 'Мультимедийный плеер',
+                icon: '📹',
+                category: 'multimedia',
+                rating: 4.2,
+                size: '8.7 MB'
+            }
+        ];
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Последовательность загрузки
+            setTimeout(() => {
+                document.getElementById('biosScreen').style.display = 'none';
+            }, 4000);
+            
+            setTimeout(() => {
+                document.getElementById('bootScreen').style.display = 'none';
+            }, 10000);
+            
+            setTimeout(() => {
+                if (!isLoggedIn) {
+                    document.getElementById('loginScreen').classList.remove('hidden');
+                }
+            }, 10500);
+            
+            // Обработка Enter в поле пароля
+            document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
+            
+            // Загрузка приложений в магазин
+            loadStoreApps();
+            
+            // Инициализация Paint
+            setupPaintCanvas();
+            
+            // Создание дополнительных окон приложений
+            createDynamicWindows();
+        });
+
+        // Система входа
+        function login() {
+            const password = document.getElementById('passwordInput').value;
+            const errorElement = document.getElementById('loginError');
+            
+            if (password === 'Andrey2914') {
+                isLoggedIn = true;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('desktop').classList.add('show');
+                showNotification('Добро пожаловать в Windows 98!');
+                
+                // Автоматическое открытие браузера
+                setTimeout(() => {
+                    openApp('browser');
+                }, 1000);
+            } else {
+                errorElement.textContent = 'Неверный пароль. Попробуйте еще раз.';
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordInput').focus();
+            }
+        }
+
+        function cancelLogin() {
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('loginError').textContent = '';
+        }
+
+        // Часы
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            document.getElementById('clock').textContent = time;
+        }
+
+        // Открытие приложений (ИСПРАВЛЕНО)
+        function openApp(appName) {
+            let windowElement = document.getElementById(appName + 'Window');
+            
+            // Если окно не существует, создаем его
+            if (!windowElement && installedApps.has(appName)) {
+                createAppWindow(appName);
+                windowElement = document.getElementById(appName + 'Window');
+            }
+            
+            if (!windowElement) {
+                showNotification(`Приложение "${appName}" не найдено или не установлено`);
+                return;
+            }
+            
+            if (openWindows.has(appName)) {
+                windowElement.style.display = 'block';
+                activateWindow(windowElement);
+                return;
+            }
+            
+            const offset = openWindows.size * 30;
+            windowElement.style.display = 'block';
+            windowElement.style.left = (100 + offset) + 'px';
+            windowElement.style.top = (100 + offset) + 'px';
+            windowElement.classList.add('opening');
+            
+            openWindows.add(appName);
+            activateWindow(windowElement);
+            updateTaskbar();
+            
+            document.getElementById('startMenu').classList.remove('show');
+            
+            setTimeout(() => {
+                windowElement.classList.remove('opening');
+            }, 200);
+        }
+
+        // Создание динамических окон для установленных приложений
+        function createAppWindow(appId) {
+            const app = appDatabase.find(a => a.id === appId);
+            if (!app) return;
+            
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = appId + 'Window';
+            windowElement.style.width = '500px';
+            windowElement.style.height = '400px';
+            
+            let windowContent = '';
+            
+            switch(app.category) {
+                case 'games':
+                    windowContent = `
+                        <div style="text-align: center; padding: 50px;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">${app.icon}</div>
+                            <h2>${app.name}</h2>
+                            <p>${app.description}</p>
+                            <br>
+                            <div class="app-button" onclick="alert('Игра запущена!')">ИГРАТЬ</div>
+                            <div class="app-button" onclick="alert('Настройки игры')">Настройки</div>
+                        </div>
+                    `;
+                    break;
+                case 'multimedia':
+                    windowContent = `
+                        <div style="padding: 20px;">
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">${app.icon}</div>
+                                <h3>${app.name}</h3>
+                            </div>
+                            <div style="background: #000; height: 200px; display: flex; align-items: center; justify-content: center; color: #00ff00; font-family: monospace;">
+                                ${app.name} v1.0 Ready
+                            </div>
+                            <div style="margin-top: 10px; display: flex; gap: 5px; justify-content: center;">
+                                <div class="app-button" onclick="alert('Воспроизведение...')">▶️</div>
+                                <div class="app-button" onclick="alert('Пауза')">⏸️</div>
+                                <div class="app-button" onclick="alert('Стоп')">⏹️</div>
+                                <div class="app-button" onclick="alert('Открыть файл')">📂</div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'internet':
+                    windowContent = `
+                        <div style="padding: 20px;">
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <div style="font-size: 32px; margin-bottom: 10px;">${app.icon}</div>
+                                <h3>${app.name}</h3>
+                            </div>
+                            <div style="border: 1px inset #c0c0c0; height: 250px; background: white; padding: 10px;">
+                                <div>Соединение с сервером...</div>
+                                <div>Подключено к ${app.name} Network</div>
+                                <div>Пользователи онлайн: 1,234,567</div>
+                                <br>
+                                <div>Список контактов:</div>
+                                <div>• Друг_1 (в сети)</div>
+                                <div>• Коллега_2 (отошел)</div>
+                                <div>• Семья_3 (не в сети)</div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <input type="text" placeholder="Введите сообщение..." style="width: 80%; padding: 2px;">
+                                <div class="app-button" style="display: inline-block;">Отправить</div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                default:
+                    windowContent = `
+                        <div style="text-align: center; padding: 50px;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">${app.icon}</div>
+                            <h2>${app.name}</h2>
+                            <p>${app.description}</p>
+                            <br>
+                            <p>Приложение успешно установлено и готово к работе!</p>
+                            <br>
+                            <div class="app-button" onclick="alert('${app.name} работает!')">Запустить</div>
+                        </div>
+                    `;
+            }
+            
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">${app.icon}</div>
+                    <div class="window-title">${app.name}</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="maximize">□</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-menubar">
+                    <div class="menu-item">Файл</div>
+                    <div class="menu-item">Правка</div>
+                    <div class="menu-item">Вид</div>
+                    <div class="menu-item">Справка</div>
+                </div>
+                <div class="window-content">
+                    ${windowContent}
+                </div>
+                <div class="window-statusbar">
+                    <div class="status-panel">Готов</div>
+                    <div class="status-panel">${app.developer}</div>
+                </div>
+            `;
+            
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        function createDynamicWindows() {
+            // Создание остальных системных окон
+            createFileManagerWindow();
+            createMinesweeperWindow();
+            createSolitaireWindow();
+            createMediaPlayerWindow();
+            createTerminalWindow();
+        }
+
+        function createFileManagerWindow() {
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = 'filemanagerWindow';
+            windowElement.style.width = '600px';
+            windowElement.style.height = '450px';
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">📁</div>
+                    <div class="window-title">Мой компьютер</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="maximize">□</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-menubar">
+                    <div class="menu-item">Файл</div>
+                    <div class="menu-item">Правка</div>
+                    <div class="menu-item">Вид</div>
+                    <div class="menu-item">Справка</div>
+                </div>
+                <div class="window-content">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 15px; padding: 20px;">
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">💽</div>
+                            <div style="font-size: 10px;">Диск (C:)</div>
+                        </div>
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">💿</div>
+                            <div style="font-size: 10px;">Диск (D:)</div>
+                        </div>
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">💾</div>
+                            <div style="font-size: 10px;">Диск (A:)</div>
+                        </div>
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">📁</div>
+                            <div style="font-size: 10px;">Мои документы</div>
+                        </div>
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">🖨️</div>
+                            <div style="font-size: 10px;">Принтеры</div>
+                        </div>
+                        <div style="text-align: center; cursor: pointer;">
+                            <div style="font-size: 48px; margin-bottom: 8px;">📞</div>
+                            <div style="font-size: 10px;">Удаленный доступ</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="window-statusbar">
+                    <div class="status-panel">6 объектов</div>
+                </div>
+            `;
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        function createMinesweeperWindow() {
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = 'minesweeperWindow';
+            windowElement.style.width = '300px';
+            windowElement.style.height = '350px';
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">💣</div>
+                    <div class="window-title">Сапер</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-menubar">
+                    <div class="menu-item">Игра</div>
+                    <div class="menu-item">Справка</div>
+                </div>
+                <div class="window-content" style="text-align: center; padding: 20px;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">💣</div>
+                    <h2>Сапер</h2>
+                    <p>Классическая игра "Сапер"</p>
+                    <br>
+                    <div class="app-button" onclick="alert('Игра началась!')">Новая игра</div>
+                    <div class="app-button" onclick="alert('Настройки сложности')">Настройки</div>
+                    <br><br>
+                    <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; background: #808080; padding: 4px;">
+                        ${Array(64).fill('<div style="width: 20px; height: 20px; background: #c0c0c0; border: 1px outset #c0c0c0; cursor: pointer;"></div>').join('')}
+                    </div>
+                </div>
+            `;
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        function createSolitaireWindow() {
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = 'solitaireWindow';
+            windowElement.style.width = '600px';
+            windowElement.style.height = '400px';
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">🃏</div>
+                    <div class="window-title">Пасьянс</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="maximize">□</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-menubar">
+                    <div class="menu-item">Игра</div>
+                    <div class="menu-item">Справка</div>
+                </div>
+                <div class="window-content" style="background: #008000; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div class="app-button" onclick="alert('Новая игра началась!')">Новая игра</div>
+                        <div class="app-button" onclick="alert('Отменить ход')">Отменить</div>
+                    </div>
+                    <div style="display: flex; justify-content: space-around; margin-bottom: 20px;">
+                        <div style="width: 60px; height: 80px; background: #000080; border: 1px solid white; border-radius: 4px; color: white; display: flex; align-items: center; justify-content: center;">🂠</div>
+                        <div style="width: 60px; height: 80px; background: white; border: 1px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center;">🃁</div>
+                        <div style="width: 60px; height: 80px; background: white; border: 1px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center;">🂱</div>
+                        <div style="width: 60px; height: 80px; background: white; border: 1px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center;">🃑</div>
+                    </div>
+                    <div style="display: flex; justify-content: space-around;">
+                        ${Array(7).fill('<div style="width: 60px; height: 80px; background: #000080; border: 1px solid white; border-radius: 4px;"></div>').join('')}
+                    </div>
+                </div>
+            `;
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        function createMediaPlayerWindow() {
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = 'mediaplayerWindow';
+            windowElement.style.width = '400px';
+            windowElement.style.height = '300px';
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">🎵</div>
+                    <div class="window-title">Windows Media Player</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="maximize">□</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-menubar">
+                    <div class="menu-item">Файл</div>
+                    <div class="menu-item">Вид</div>
+                    <div class="menu-item">Воспроизведение</div>
+                </div>
+                <div class="window-content">
+                    <div style="background: #000; height: 150px; display: flex; align-items: center; justify-content: center; color: #00ff00; font-family: monospace; font-size: 18px;">
+                        ♪ Media Player ♪
+                    </div>
+                    <div style="margin: 10px 0; background: #c0c0c0; border: 1px inset #c0c0c0; height: 20px; display: flex; align-items: center; padding: 0 5px;">
+                        <div style="width: 100%; height: 10px; background: #808080; border: 1px inset #c0c0c0;">
+                            <div style="width: 30%; height: 100%; background: linear-gradient(to right, #0080ff, #00ff80);"></div>
+                        </div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="app-button" onclick="alert('Воспроизведение')">▶️</div>
+                        <div class="app-button" onclick="alert('Пауза')">⏸️</div>
+                        <div class="app-button" onclick="alert('Стоп')">⏹️</div>
+                        <div class="app-button" onclick="alert('Открыть файл')">📂</div>
+                    </div>
+                </div>
+                <div class="window-statusbar">
+                    <div class="status-panel">Остановлено</div>
+                </div>
+            `;
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        function createTerminalWindow() {
+            const windowElement = document.createElement('div');
+            windowElement.className = 'window';
+            windowElement.id = 'terminalWindow';
+            windowElement.style.width = '600px';
+            windowElement.style.height = '400px';
+            windowElement.innerHTML = `
+                <div class="window-titlebar">
+                    <div class="window-icon">💻</div>
+                    <div class="window-title">Командная строка MS-DOS</div>
+                    <div class="window-controls">
+                        <div class="window-control" data-action="minimize">_</div>
+                        <div class="window-control" data-action="maximize">□</div>
+                        <div class="window-control" data-action="close">×</div>
+                    </div>
+                </div>
+                <div class="window-content" style="padding: 0; background: #000; color: #c0c0c0; font-family: 'Courier New', monospace; font-size: 12px;">
+                    <div style="padding: 10px; height: 100%; overflow-y: auto;" id="terminalOutput">
+                        <div>Microsoft Windows 98 [Версия 4.10.2222]</div>
+                        <div>(C) Корпорация Майкрософт, 1981-1998.</div>
+                        <div></div>
+                        <div>C:\\WINDOWS></div>
+                    </div>
+                    <input type="text" id="terminalInput" style="position: absolute; bottom: 0; left: 0; width: 100%; background: transparent; border: none; color: #c0c0c0; font-family: 'Courier New', monospace; font-size: 12px; padding: 0 10px; outline: none;" placeholder="">
+                </div>
+            `;
+            document.getElementById('desktop').appendChild(windowElement);
+        }
+
+        // Активация окна
+        function activateWindow(windowElement) {
+            document.querySelectorAll('.window').forEach(w => {
+                w.classList.remove('active');
+                w.classList.add('inactive');
+            });
+            
+            windowElement.classList.add('active');
+            windowElement.classList.remove('inactive');
+            windowElement.style.zIndex = ++zIndexCounter;
+            activeWindow = windowElement;
+            
+            updateTaskbar();
+        }
+
+        // Панель задач
+        function updateTaskbar() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
+            
+            openWindows.forEach(appName => {
+                const taskItem = document.createElement('div');
+                taskItem.className = 'task-item';
+                taskItem.innerHTML = `<span style="margin-right: 4px;">${getAppIcon(appName)}</span>${getAppTitle(appName)}`;
+                taskItem.onclick = () => {
+                    const windowElement = document.getElementById(appName + 'Window');
+                    if (windowElement.style.display === 'none') {
+                        windowElement.style.display = 'block';
+                    }
+                    activateWindow(windowElement);
+                };
+                
+                const windowElement = document.getElementById(appName + 'Window');
+                if (windowElement && windowElement.classList.contains('active')) {
+                    taskItem.classList.add('active');
+                }
+                
+                taskList.appendChild(taskItem);
+            });
+        }
+
+        function getAppIcon(appName) {
+            const icons = {
+                'browser': '🌐',
+                'filemanager': '📁',
+                'calculator': '🔢',
+                'notepad': '📝',
+                'paint': '🎨',
+                'appstore': '🏪',
+                'minesweeper': '💣',
+                'solitaire': '🃏',
+                'mediaplayer': '🎵',
+                'terminal': '💻'
+            };
+            
+            // Проверяем установленные приложения
+            const app = appDatabase.find(a => a.id === appName);
+            if (app) return app.icon;
+            
+            return icons[appName] || '📄';
+        }
+
+        function getAppTitle(appName) {
+            const titles = {
+                'browser': 'Internet Explorer',
+                'filemanager': 'Мой компьютер',
+                'calculator': 'Калькулятор',
+                'notepad': 'Блокнот',
+                'paint': 'Paint',
+                'appstore': 'Магазин приложений',
+                'minesweeper': 'Сапер',
+                'solitaire': 'Пасьянс',
+                'mediaplayer': 'Проигрыватель',
+                'terminal': 'Командная строка'
+            };
+            
+            // Проверяем установленные приложения
+            const app = appDatabase.find(a => a.id === appName);
+            if (app) return app.name;
+            
+            return titles[appName] || appName;
+        }
+
+        // Управление окнами
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('window-control')) {
+                const action = e.target.dataset.action;
+                const windowElement = e.target.closest('.window');
+                const appName = windowElement.id.replace('Window', '');
+                
+                switch(action) {
+                    case 'close':
+                        closeWindow(appName);
+                        break;
+                    case 'minimize':
+                        minimizeWindow(windowElement);
+                        break;
+                    case 'maximize':
+                        maximizeWindow(windowElement);
+                        break;
+                }
+            }
+        });
+
+        function closeWindow(appName) {
+            const windowElement = document.getElementById(appName + 'Window');
+            windowElement.style.display = 'none';
+            openWindows.delete(appName);
+            updateTaskbar();
+        }
+
+        function minimizeWindow(windowElement) {
+            windowElement.style.display = 'none';
+        }
+
+        function maximizeWindow(windowElement) {
+            if (windowElement.classList.contains('maximized')) {
+                windowElement.classList.remove('maximized');
+                windowElement.style.width = '';
+                windowElement.style.height = '';
+                windowElement.style.top = '';
+                windowElement.style.left = '';
+            } else {
+                windowElement.classList.add('maximized');
+                windowElement.style.width = '100vw';
+                windowElement.style.height = 'calc(100vh - 30px)';
+                windowElement.style.top = '0';
+                windowElement.style.left = '0';
+            }
+        }
+
+        // Перетаскивание окон
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        document.addEventListener('mousedown', function(e) {
+            const titlebar = e.target.closest('.window-titlebar');
+            if (titlebar && !e.target.classList.contains('window-control')) {
+                isDragging = true;
+                const windowElement = titlebar.closest('.window');
+                activateWindow(windowElement);
+                
+                const rect = windowElement.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+                
+                document.addEventListener('mousemove', dragWindow);
+                document.addEventListener('mouseup', stopDrag);
+            }
+        });
+
+        function dragWindow(e) {
+            if (!isDragging || !activeWindow) return;
+            
+            const x = e.clientX - dragOffsetX;
+            const y = e.clientY - dragOffsetY;
+            
+            activeWindow.style.left = Math.max(0, Math.min(x, window.innerWidth - 200)) + 'px';
+            activeWindow.style.top = Math.max(0, Math.min(y, window.innerHeight - 100)) + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', dragWindow);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // Браузер (ИСПРАВЛЕН)
+        function navigateToUrl() {
+            const url = document.getElementById('addressInput').value.trim();
+            if (!url) return;
+            
+            let finalUrl = url;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                finalUrl = 'https://' + url;
+                document.getElementById('addressInput').value = finalUrl;
+            }
+            
+            // Создаем iframe для загрузки реального сайта
+            const browserFrame = document.getElementById('browserFrame');
+            browserFrame.innerHTML = `<iframe src="${finalUrl}" style="width: 100%; height: 100%; border: none;" title="Browser Content"></iframe>`;
+            
+            document.getElementById('browserStatus').textContent = 'Загрузка...';
+            
+            setTimeout(() => {
+                document.getElementById('browserStatus').textContent = 'Готов';
+            }, 2000);
+        }
+
+        function navigateTo(url) {
+            document.getElementById('addressInput').value = url;
+            navigateToUrl();
+        }
+
+        function browserAction(action) {
+            switch(action) {
+                case 'back':
+                    showNotification('Назад');
+                    break;
+                case 'forward':
+                    showNotification('Вперед');
+                    break;
+                case 'refresh':
+                    navigateToUrl();
+                    break;
+                case 'home':
+                    navigateTo('https://www.google.com');
+                    break;
+                case 'search':
+                    navigateTo('https://www.google.com');
+                    break;
+                case 'favorites':
+                    showNotification('Избранное');
+                    break;
+            }
+        }
+
+        // Магазин приложений
+        function loadStoreApps() {
+            const storeApps = document.getElementById('storeApps');
+            storeApps.innerHTML = '';
+            
+            appDatabase.forEach(app => {
+                const appItem = document.createElement('div');
+                appItem.className = 'app-item';
+                appItem.innerHTML = `
+                    <div class="app-icon">${app.icon}</div>
+                    <div class="app-info">
+                        <div class="app-name">${app.name}</div>
+                        <div class="app-developer">${app.developer}</div>
+                        <div class="app-description">${app.description}</div>
+                        <div class="app-rating">★★★★☆ ${app.rating} | ${app.size}</div>
+                    </div>
+                    <div class="app-actions">
+                        <div class="app-button ${installedApps.has(app.id) ? 'installed' : ''}" 
+                             onclick="installApp('${app.id}')">
+                            ${installedApps.has(app.id) ? 'Установлено' : 'Установить'}
+                        </div>
+                        <div class="app-button" onclick="openApp('${app.id}')">Запустить</div>
+                    </div>
+                `;
+                storeApps.appendChild(appItem);
+            });
+        }
+
+        function installApp(appId) {
+            const app = appDatabase.find(a => a.id === appId);
+            if (!app) return;
+            
+            if (installedApps.has(appId)) {
+                showNotification(`${app.name} уже установлено`);
+                return;
+            }
+            
+            // Эмуляция установки
+            showNotification(`Установка ${app.name}...`);
+            
+            setTimeout(() => {
+                installedApps.add(appId);
+                showNotification(`${app.name} успешно установлено!`);
+                loadStoreApps(); // Обновить интерфейс
+                
+                // Добавить на рабочий стол
+                addToDesktop(app);
+            }, 2000);
+        }
+
+        function addToDesktop(app) {
+            const desktopIcons = document.querySelector('.desktop-icons');
+            const icon = document.createElement('div');
+            icon.className = 'desktop-icon';
+            icon.dataset.app = app.id;
+            icon.innerHTML = `
+                <div class="icon-image">${app.icon}</div>
+                <div class="icon-label">${app.name}</div>
+            `;
+            desktopIcons.appendChild(icon);
+        }
+
+        function filterApps(category) {
+            document.querySelectorAll('.store-category').forEach(cat => {
+                cat.classList.remove('active');
+            });
+            
+            document.querySelector(`[data-category="${category}"]`).classList.add('active');
+            
+            const storeApps = document.getElementById('storeApps');
+            storeApps.innerHTML = '';
+            
+            const filteredApps = category === 'all' ? appDatabase : appDatabase.filter(app => app.category === category);
+            
+            filteredApps.forEach(app => {
+                const appItem = document.createElement('div');
+                appItem.className = 'app-item';
+                appItem.innerHTML = `
+                    <div class="app-icon">${app.icon}</div>
+                    <div class="app-info">
+                        <div class="app-name">${app.name}</div>
+                        <div class="app-developer">${app.developer}</div>
+                        <div class="app-description">${app.description}</div>
+                        <div class="app-rating">★★★★☆ ${app.rating} | ${app.size}</div>
+                    </div>
+                    <div class="app-actions">
+                        <div class="app-button ${installedApps.has(app.id) ? 'installed' : ''}" 
+                             onclick="installApp('${app.id}')">
+                            ${installedApps.has(app.id) ? 'Установлено' : 'Установить'}
+                        </div>
+                        <div class="app-button" onclick="openApp('${app.id}')">Запустить</div>
+                    </div>
+                `;
+                storeApps.appendChild(appItem);
+            });
+        }
+
+        function searchApps(query) {
+            const storeApps = document.getElementById('storeApps');
+            storeApps.innerHTML = '';
+            
+            const filteredApps = appDatabase.filter(app => 
+                app.name.toLowerCase().includes(query.toLowerCase()) ||
+                app.developer.toLowerCase().includes(query.toLowerCase()) ||
+                app.description.toLowerCase().includes(query.toLowerCase())
+            );
+            
+            filteredApps.forEach(app => {
+                const appItem = document.createElement('div');
+                appItem.className = 'app-item';
+                appItem.innerHTML = `
+                    <div class="app-icon">${app.icon}</div>
+                    <div class="app-info">
+                        <div class="app-name">${app.name}</div>
+                        <div class="app-developer">${app.developer}</div>
+                        <div class="app-description">${app.description}</div>
+                        <div class="app-rating">★★★★☆ ${app.rating} | ${app.size}</div>
+                    </div>
+                    <div class="app-actions">
+                        <div class="app-button ${installedApps.has(app.id) ? 'installed' : ''}" 
+                             onclick="installApp('${app.id}')">
+                            ${installedApps.has(app.id) ? 'Установлено' : 'Установить'}
+                        </div>
+                        <div class="app-button" onclick="openApp('${app.id}')">Запустить</div>
+                    </div>
+                `;
+                storeApps.appendChild(appItem);
+            });
+        }
+
+        function refreshStore() {
+            loadStoreApps();
+            showNotification('Магазин приложений обновлен');
+        }
+
+        // Калькулятор
+                function calcAction(action) {
+            const display = document.getElementById('calcDisplay');
+
+            if (action === 'clear') {
+                calcDisplay = '0';
+                calcExpression = '';
+            } else if (action === 'ce') {
+                calcDisplay = '0';
+            } else if (action === 'backspace') {
+                if (calcDisplay.length > 1) {
+                    calcDisplay = calcDisplay.slice(0, -1);
+                    calcExpression = calcExpression.slice(0, -1);
+                } else {
+                    calcDisplay = '0';
+                    calcExpression = '';
+                }
+            } else if (action === '=') {
+                try {
+                    const result = eval(calcExpression);
+                    calcDisplay    = result.toString();
+                    calcExpression = result.toString();
+                } catch {
+                    calcDisplay    = 'Ошибка';
+                    calcExpression = '';
+                }
+            } else {
+                // Ввод цифр и знаков
+                if (calcDisplay === '0' && !isNaN(action)) {
+                    calcDisplay    = action;
+                    calcExpression = action;
+                } else {
+                    calcDisplay    += action;
+                    calcExpression += action;
+                }
+            }
+
+            display.textContent = calcDisplay;
+        }
+
+        // Меню «Пуск»
+        function toggleStartMenu() {
+            document.getElementById('startMenu').classList.toggle('show');
+        }
+
+        // Показ рабочего стола — скрываем все окна
+        function showDesktop() {
+            document.querySelectorAll('.window').forEach(w => w.style.display = 'none');
+        }
+
+        // Системные уведомления
+        function showNotification(text) {
+            const n = document.getElementById('notification');
+            document.getElementById('notificationText').textContent = text;
+            n.classList.add('show');
+            setTimeout(() => n.classList.remove('show'), 3000);
+        }
+
+        // Диалоговое окно «Выполнить»
+        function showRunDialog() {
+            showDialog(
+                'Запуск программы', '▶️',
+                'Введите название команды или программы:<br><input type="text" id="runInput" style="width: 180px; padding:2px;" placeholder="Например, calc">',
+                [
+                    { text: 'OK', action: 'executeRun()' },
+                    { text: 'Отмена', action: 'closeDialog()' }
+                ]
+            );
+        }
+
+        function executeRun() {
+            const cmd = document.getElementById('runInput').value.toLowerCase();
+            const map = { calc:'calculator', notepad:'notepad', paint:'paint', iexplore:'browser' };
+            if (map[cmd]) {
+                openApp(map[cmd]);
+            } else {
+                showNotification(`Не найдено: ${cmd}`);
+            }
+            closeDialog();
+        }
+
+        // Диалоговые окна
+        function showDialog(title, icon, html, buttons) {
+            const dlg = document.createElement('div');
+            dlg.className = 'dialog show';
+            dlg.innerHTML = `
+                <div class="dialog-titlebar"><span>${title}</span></div>
+                <div class="dialog-content">
+                    <div class="dialog-icon">${icon}</div>
+                    <div class="dialog-text">${html}</div>
+                </div>
+                <div class="dialog-buttons">
+                    ${buttons.map(b => `<div class="dialog-button${b.default?' default':''}" onclick="${b.action}">${b.text}</div>`).join('')}
+                </div>
+            `;
+            document.body.appendChild(dlg);
+        }
+        function closeDialog() {
+            document.querySelectorAll('.dialog').forEach(d=>d.remove());
+        }
+
+        // Полноэкранный режим (F11)
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F11') {
+                e.preventDefault();
+                document.fullscreenElement
+                    ? document.exitFullscreen()
+                    : document.documentElement.requestFullscreen();
+            }
+        });
+
+        // Финальная инициализация
+        console.log('Windows 98 VM: все компоненты загружены и работают корректно.');
+    </script>
+</body>
+</html>
